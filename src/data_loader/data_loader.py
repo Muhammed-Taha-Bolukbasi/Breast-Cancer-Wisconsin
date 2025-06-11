@@ -1,14 +1,11 @@
 import pandas as pd
 import os
 from pathlib import Path
-import logging
+import yaml
+from typing import Tuple, Union
 from typing import Optional, Union
 from .error_messages import DataReadingErrorMessages as EM, SUPPORTED_FILE_EXTENSIONS
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 data_reader_functions = {
     ".csv": pd.read_csv
@@ -17,7 +14,18 @@ data_reader_functions = {
 class DataLoader:
     """A class to load data from various file formats."""
 
-    def load_data(self, file_path: Union[str, Path]) -> Optional[pd.DataFrame]:
+    def __init__(self, target_col = None):
+        """
+        Initializes the DataLoader class.
+        """
+        if target_col is None:
+            with open(os.path.join(project_root, "conf.yaml"), "r") as f:
+                config = yaml.safe_load(f)
+            self.target_col = config.get("target_col")
+        else:
+            self.target_col = target_col
+
+    def load_data(self, file_path: Union[str, Path]) -> Tuple[pd.DataFrame, pd.Series]:
         """
         Loads data from a  file.
 
@@ -37,11 +45,25 @@ class DataLoader:
         reader_func = data_reader_functions.get(ext)
         data: pd.DataFrame = reader_func(file_path)  # type: ignore
         if data.empty:
-            logger.error(EM.EMPTY_DATA_FILE.value)
             raise ValueError(EM.EMPTY_DATA_FILE.value)
 
-        return data
-    
+        X, y = self._split_dataframe(data)
+        return X, y
+
+    def _split_dataframe(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
+        """
+        Splits the DataFrame into features and target.
+
+        Args:
+            df (pd.DataFrame): The DataFrame to split.
+
+        Returns:
+            tuple[pd.DataFrame, pd.Series]: A tuple containing the features DataFrame and the target Series.
+        """
+        X = df.drop(columns=[self.target_col])
+        y = df[self.target_col]
+        return X, y
+
 
     def _validate_file_path(self, file_path: Union[str, Path]) -> None:
         """
@@ -54,11 +76,9 @@ class DataLoader:
             ValueError: If the file path is not a string or Path object.
         """
         if not isinstance(file_path, (str, Path)):
-            logger.error(EM.INVALID_FILE_PATH_TYPE.value.format(type=type(file_path).__name__))
             raise ValueError(EM.INVALID_FILE_PATH_TYPE.value.format(type=type(file_path).__name__))
         
         if not os.path.exists(file_path):
-            logger.error(EM.FILE_NOT_FOUND.value.format(file_path=file_path))
             raise FileNotFoundError(EM.FILE_NOT_FOUND.value.format(file_path=file_path))
         
 
@@ -74,7 +94,6 @@ class DataLoader:
         """
         ext = Path(file_path).suffix
         if ext not in SUPPORTED_FILE_EXTENSIONS:
-            logger.error(EM.EXT_NOT_SUPPORTED.value.format(ext=ext, supported_extensions=SUPPORTED_FILE_EXTENSIONS))
             raise ValueError(EM.EXT_NOT_SUPPORTED.value.format(ext=ext, supported_extensions=SUPPORTED_FILE_EXTENSIONS))
         
         return ext
