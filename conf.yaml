@@ -1,0 +1,4 @@
+# Configuration file for the project
+# Specify the name of the target column for your dataset
+
+target_col: diagnosis
