@@ -15,6 +15,10 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, LabelEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.feature_selection import VarianceThreshold
+from sklearn.preprocessing import PolynomialFeatures
+
 
 class DropUnnecessaryColumns(BaseEstimator, TransformerMixin):
     """
@@ -27,10 +31,19 @@ class DropUnnecessaryColumns(BaseEstimator, TransformerMixin):
         id_cols = [col for col in X.columns if col.lower() in ['id']]
         # List of columns to drop
         self.columns_to_drop_ = empty_cols + id_cols
+        # Columns to keep (used for get_feature_names_out)
+        self.columns_to_keep_ = [col for col in X.columns if col not in self.columns_to_drop_]
         return self
 
     def transform(self, X):
         return X.drop(columns=self.columns_to_drop_, errors='ignore')
+
+    def get_feature_names_out(self, input_features=None):
+        # If input_features is provided, filter based on columns to keep
+        if input_features is not None:
+            return np.array([col for col in input_features if col in self.columns_to_keep_])
+        # Else return stored columns to keep
+        return np.array(self.columns_to_keep_)
 
 class LabelEncoderTransformer:
     """
@@ -89,12 +102,19 @@ class DataPreprocessorPipeline(BaseEstimator, TransformerMixin):
         # Automatically detect numerical and categorical columns
         self.numerical_cols = X.select_dtypes(include=[np.number]).columns.tolist()
         self.categorical_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
-        # For numerical features: impute missing values with median, then scale with MinMaxScaler
+        # For numerical features: impute missing values with median, then scale with MinMaxScaler, then feature extraction, then feature selection
         num_pipeline = Pipeline([
             ('drop_empty', DropUnnecessaryColumns()),
             ('imputer', SimpleImputer(strategy='median')),
-            ('scaler', MinMaxScaler())
-        ])        
+            ('scaler', MinMaxScaler()),
+            # Example feature extraction: PolynomialFeatures
+            ('feature_extraction', PolynomialFeatures(degree=2, include_bias=False)),
+            ('feature_selection', SelectKBest(score_func=f_classif, k=400))
+        ])
+
+        """
+        TODO: k sayisini, n_estimators, max_depth gibi parametreleri config dosyasindan alacak sekilde duzenle
+        """
         # For categorical features: impute missing values with mode, then encode with OneHotEncoder
         cat_pipeline = Pipeline([
             ('imputer', SimpleImputer(strategy='most_frequent')),
@@ -106,7 +126,7 @@ class DataPreprocessorPipeline(BaseEstimator, TransformerMixin):
             ('cat', cat_pipeline, self.categorical_cols)
         ])
         # Fit the pipeline to the data
-        self.pipeline.fit(X)
+        self.pipeline.fit(X, y)
         return self
 
     def transform(self, X):
@@ -135,11 +155,12 @@ class DataPreprocessor:
 
     def fit_transform(self, X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
         # Fit and transform features
-        X_transformed = self.pipeline.fit_transform(X)
-        
+        X_transformed = self.pipeline.fit_transform(X, y)
+        feature_names = self.pipeline.pipeline.get_feature_names_out() # type: ignore
+        X_transformed_df = pd.DataFrame(X_transformed, columns=feature_names, index=X.index)
         # Encode and merge target
         self.label_encoder = LabelEncoderTransformer()
-        df_merged = self.label_encoder.encode_and_merge(X_transformed, y)
+        df_merged = self.label_encoder.encode_and_merge(X_transformed_df, y)
         return df_merged
 
 if __name__ == "__main__":
@@ -151,6 +172,4 @@ if __name__ == "__main__":
     preprocessor = DataPreprocessor()
     df_processed = preprocessor.fit_transform(df, df_target)
     print(df_processed.tail(5))
-
-
 
