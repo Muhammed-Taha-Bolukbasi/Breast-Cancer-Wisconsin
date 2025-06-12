@@ -83,27 +83,22 @@ def test_label_encoder_accepts_single_column_dataframe(preprocessor_test_df):
     y_df = y.to_frame()
     encoder = LabelEncoderTransformer()
     df_merged = encoder.encode_and_merge(X, y_df)  # type: ignore
-    # Should work and produce a DataFrame with Target_Label or y.name
     assert 'Target_Label' in df_merged.columns or y.name in df_merged.columns
 
 def test_label_encoder_numeric_target_not_encoded(preprocessor_test_df):
     from src.data_preprocessing.data_preprocessor import LabelEncoderTransformer
     X, y = split_features_target(preprocessor_test_df)
-    # Make y numeric
     y_num = pd.Series(np.arange(len(y)), name='numeric_target', index=y.index)
     encoder = LabelEncoderTransformer()
     df_merged = encoder.encode_and_merge(X, y_num)
-    # Should keep the original name and not encode
     assert 'Target_Label' not in df_merged.columns
     assert 'numeric_target' in df_merged.columns
     assert pd.api.types.is_integer_dtype(df_merged['numeric_target'])
-    # Should not be all zeros (should be a range)
     assert (df_merged['numeric_target'] == np.arange(len(y))).all()
 
 def test_label_encoder_length_mismatch_raises(preprocessor_test_df):
     from src.data_preprocessing.data_preprocessor import LabelEncoderTransformer
     X, y = split_features_target(preprocessor_test_df)
-    # Remove one row from y to create a mismatch
     y_short = y.iloc[:-1]
     encoder = LabelEncoderTransformer()
     with pytest.raises(ValueError, match="Length mismatch between X and y!"):

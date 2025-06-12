@@ -7,6 +7,7 @@ import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(project_root)
 
+import yaml
 from src.data_loader.data_loader import DataLoader
 from src.data_preprocessing.data_preprocessor import DataPreprocessor
 import pandas as pd
@@ -16,7 +17,6 @@ import numpy as np
 class XGBoost(BaseEstimator, ClassifierMixin):
     def __init__(self, **kwargs):
         self.model = XGBClassifier(use_label_encoder=False, eval_metric='logloss', **kwargs)        
-
 
     def fit(self, X, y=None):
         """
@@ -43,6 +43,21 @@ class XGBoost(BaseEstimator, ClassifierMixin):
         self.model.set_params(**params)
         return self
     
+    def save_model(self):
+        """
+        Save the trained XGBoost model to the given file path using joblib.
+        """
+        import yaml
+        import joblib
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        with open(os.path.join(project_root, "conf.yaml"), 'r') as file:
+            config = yaml.safe_load(file)
+            model_save_name = config.get("model_save_name", "xgboost_model.pkl")
+        path = os.path.join(project_root, "models_saves", "xgboost")
+        abs_model_path = os.path.join(path, model_save_name)
+        joblib.dump(self.model, abs_model_path)
+        return abs_model_path
+
 
 if __name__ == "__main__":
     # Example usage
@@ -53,12 +68,12 @@ if __name__ == "__main__":
     preprocessor = DataPreprocessor()
     df_processed = preprocessor.fit_transform(df, df_target)
 
-    X_train, X_test, y_train, y_test = train_test_split(df_processed.drop(columns=["Target_Label"]), df_processed["Target_Label"], test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(df_processed.drop(columns=["Target_Label"]), df_processed["Target_Label"], test_size=0.2, random_state=42)
 
     model = XGBoost(n_estimators=100, max_depth=3, learning_rate=0.1)
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    # Calculate and print accuracy
-    from sklearn.metrics import accuracy_score
-    acc = accuracy_score(y_test, y_pred)
-    print(f"Accuracy: {acc:.8f}")
+    print("Predictions:", y_pred)
+    # Save the trained model
+    saved_path = model.save_model()
+    print(f"Model saved to: {saved_path}")

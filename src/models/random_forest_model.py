@@ -43,6 +43,21 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         self.model.set_params(**params)
         return self
     
+    def save_model(self):
+        """
+        Save the trained Random Forest model to the given file path using joblib.
+        """
+        import yaml
+        import joblib
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        with open(os.path.join(project_root, "conf.yaml"), 'r') as file:
+            config = yaml.safe_load(file)
+            model_save_name = config.get("model_save_name", "random_forest_model.pkl")
+        path = os.path.join(project_root, "models_saves", "random_forest")
+        abs_model_path = os.path.join(path, model_save_name)
+        joblib.dump(self.model, abs_model_path)
+        return abs_model_path
+    
 
 if __name__ == "__main__":
     # Example usage
@@ -53,7 +68,7 @@ if __name__ == "__main__":
     preprocessor = DataPreprocessor()
     df_processed = preprocessor.fit_transform(df, df_target)
 
-    X_train, X_test, y_train, y_test = train_test_split(df_processed.drop(columns=["Target_Label"]), df_processed["Target_Label"], test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(df_processed.drop(columns=["Target_Label"]), df_processed["Target_Label"], test_size=0.2, random_state=42) # type: ignore
 
     model = RandomForest(n_estimators=100, max_depth=15, random_state=42)
     model.fit(X_train, y_train)
@@ -63,6 +78,9 @@ if __name__ == "__main__":
     from sklearn.metrics import accuracy_score
     acc = accuracy_score(y_test, y_pred)
     print(f"Accuracy: {acc:.4f}")
+    # Save the trained model
+    saved_path = model.save_model()
+    print(f"Model saved to: {saved_path}")
 
-   
-    
+
+
