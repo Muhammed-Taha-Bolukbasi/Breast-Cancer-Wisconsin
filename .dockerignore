@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pkl
+notebooks/
+htmlcov/
+tests/
+models_saves/
+.git
+*.ipynb
+catboost_info/
+uv.lock
+*.log
+*.csv
+*.pyo
+*.pyd

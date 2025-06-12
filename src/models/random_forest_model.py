@@ -46,6 +46,7 @@ class RandomForest(BaseEstimator, ClassifierMixin):
     def save_model(self):
         """
         Save the trained Random Forest model to the given file path using joblib.
+        Creates the directory if it does not exist.
         """
         import yaml
         import joblib
@@ -54,10 +55,11 @@ class RandomForest(BaseEstimator, ClassifierMixin):
             config = yaml.safe_load(file)
             model_save_name = config.get("model_save_name", "random_forest_model.pkl")
         path = os.path.join(project_root, "models_saves", "random_forest")
+        os.makedirs(path, exist_ok=True)  # Ensure directory exists
         abs_model_path = os.path.join(path, model_save_name)
         joblib.dump(self.model, abs_model_path)
         return abs_model_path
-    
+
 
 
 
