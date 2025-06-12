@@ -1,1 +1,1 @@
-![App Diagram](image/diagram.png)
+![App Diagram](images/diagram.png)
