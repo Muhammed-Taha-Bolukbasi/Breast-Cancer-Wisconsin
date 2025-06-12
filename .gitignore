@@ -8,6 +8,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+models_saves/**/*.pkl
 catboost_info/
 notebooks/
 build/

@@ -1,27 +1,43 @@
-# Configuration file for the project
-# Specify the name of the target column for your dataset
-
 target_col: diagnosis
-
-SimpleImputer:
-  mean:
-    strategy: mean
-  median:
-    strategy: median
-  most_frequent:
-    strategy: most_frequent
-  constant:
-    strategy: constant
-    fill_value: 0
-
-Scaler:
-  StandardScaler:
-    with_mean: true
-    with_std: true
-  MinMaxScaler:
-    feature_range: [0, 1]
-  RobustScaler:
-    with_centering: true
-    with_scaling: true
-  MaxAbsScaler:
-    copy: true
+csv_name: breast_cancer.csv
+selectkbest: 142
+models:
+  RandomForestClassifier:
+    n_estimators: 130
+    max_depth: 4
+    random_state: 42
+    test_size: 0.2
+  XGBoost:
+    n_estimators: 107
+    max_depth: 5
+    learning_rate: 0.1
+    random_state: 42
+    test_size: 0.22
+  LogisticRegression:
+    penalty: l1
+    C: 1.0
+    solver: lbfgs
+    max_iter: 1000
+    random_state: 42
+    test_size: 0.83
+  SVM:
+    kernel: rbf
+    C: 3.83
+    probability: true
+    random_state: 42
+    test_size: 0.72
+  CatBoost:
+    iterations: 100
+    depth: 6
+    learning_rate: 0.1
+    random_seed: 42
+    verbose: false
+    test_size: 0.2
+test_size: 0.2
+model_save_name: breast_cancer_model.pkl
+metrics:
+- accuracy
+- precision
+- recall
+- f1-score
+model: SVM
