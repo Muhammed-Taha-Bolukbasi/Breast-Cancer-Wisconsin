@@ -59,28 +59,5 @@ class RandomForest(BaseEstimator, ClassifierMixin):
         return abs_model_path
     
 
-if __name__ == "__main__":
-    # Example usage
-    dataloader = DataLoader()
-    csv_path = os.path.join(project_root, "data", "breast_cancer.csv")
-    df, df_target = dataloader.load_data(csv_path)
-    
-    preprocessor = DataPreprocessor()
-    df_processed = preprocessor.fit_transform(df, df_target)
-
-    X_train, X_test, y_train, y_test = train_test_split(df_processed.drop(columns=["Target_Label"]), df_processed["Target_Label"], test_size=0.2, random_state=42) # type: ignore
-
-    model = RandomForest(n_estimators=100, max_depth=15, random_state=42)
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-
-    # Calculate and print accuracy
-    from sklearn.metrics import accuracy_score
-    acc = accuracy_score(y_test, y_pred)
-    print(f"Accuracy: {acc:.4f}")
-    # Save the trained model
-    saved_path = model.save_model()
-    print(f"Model saved to: {saved_path}")
-
 
 

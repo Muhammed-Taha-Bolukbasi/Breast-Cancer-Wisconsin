@@ -17,7 +17,10 @@ from src.models.catboost_model import CatBoostModel
 from src.models.xgboost_model import XGBoost
 from src.models.random_forest_model import RandomForest
 from src.models.logistic_regression_model import LogisticRegressionModel
+from src.streamlit_app.plot_utils import plot_confusion_matrix
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
+        
 
 class App:
     def __init__(self):
@@ -30,35 +33,58 @@ class App:
             self.config = yaml.safe_load(file)
         self.Init_Streamlit_Page()    
 
-    def run(self):
-        self.processed_data, self.preprocessed_data, self.label_map = self.load_data(os.path.join(project_root, "data", self.config.get("csv_name", "breast_cancer.csv")))
-
-        #self.generate()
 
     def load_data(self, csv_path):
         """Load and preprocess data from a CSV file."""
         df_preprocessed = pd.read_csv(csv_path)
+        # feature_extraction parametresini string ise bool'a çevir
+        feature_extraction_val = self.config.get("feature_extraction", True)        
         df, df_target = self.dataloader.load_data(csv_path)
-        df_processed, label_map = self.preprocessor.fit_transform(df, df_target, return_mapping=True)
+        df_processed, label_map = self.preprocessor.fit_transform(df, df_target, return_mapping=True, feature_extraction=feature_extraction_val)
         return df_processed, df_preprocessed, label_map
 
 
     def Init_Streamlit_Page(self):
-        # Set the title and layout of the Streamlit app
         st.set_page_config(page_title="Machine Learning Model Comparison", layout="wide")
         st.title("Machine Learning Model Comparison")
         st.sidebar.header("User Input Features")
-        self.processed_data, self.preprocessed_data, self.label_map = self.load_data(os.path.join(project_root, "data", self.config.get("csv_name", "breast_cancer.csv")))
-
-        # --- Sidebar Buttons kaldırıldı, ana içerik doğrudan gösterilecek ---
+        self.data_load_error = False
+        self.data_load_error_msg = None
+        try:
+            self.processed_data, self.preprocessed_data, self.label_map = self.load_data(os.path.join(project_root, "data", self.config.get("csv_name", "breast_cancer.csv")))
+        except Exception as e:
+            self.data_load_error = True
+            self.data_load_error_msg = f"Veri yüklenirken hata oluştu: {e}"
+            self.processed_data, self.preprocessed_data, self.label_map = None, None, None
+        # Sidebar ayarları her durumda gösterilsin
         col1, col2 = st.columns(2)
         with col1:
             self.add_parameter_ui()
         with col2:
-            self.show_datasets()
+            if self.data_load_error:
+                st.error(self.data_load_error_msg)
+                st.info("Lütfen target_col ve csv_name ayarlarını sidebar'dan düzeltin ve kaydedin.")
+            else:
+                self.show_datasets()
 
     def add_parameter_ui(self):
         """Add UI for model parameters and training."""
+        # --- Config (target_col, csv_name) edit UI ---
+        st.sidebar.subheader("Veri ve Hedef Ayarları")
+        conf_path = os.path.join(project_root, 'conf.yaml')
+        with open(conf_path, 'r', encoding='utf-8') as f:
+            conf = yaml.safe_load(f)
+        # Editable fields for target_col and csv_name
+        target_col = st.sidebar.text_input("Target Column (target_col)", value=conf.get("target_col", ""), key="target_col_input")
+        csv_name = st.sidebar.text_input("CSV File Name (csv_name)", value=conf.get("csv_name", ""), key="csv_name_input")
+        if st.sidebar.button("Veri Ayarlarını Kaydet (conf.yaml)", key="save_data_conf"):
+            conf['target_col'] = target_col
+            conf['csv_name'] = csv_name
+            with open(conf_path, 'w', encoding='utf-8') as f:
+                yaml.dump(conf, f, allow_unicode=True, sort_keys=False)
+            st.sidebar.success("Veri ayarları conf.yaml dosyasına kaydedildi.")
+            st.session_state['show_yaml_viewer'] = True
+
         # Sidebar for model selection
         st.sidebar.subheader("Model Selection")
         self.model_type = st.sidebar.selectbox("Select Model", ["SVM", "CatBoost", "XGBoost", "Random Forest", "Logistic Regression"])
@@ -147,10 +173,17 @@ class App:
 
         # SelectKBest parametresi (global, modelden bağımsız)
         selectkbest_val = int(conf.get("selectkbest", 300))
-        self.selectkbest = st.sidebar.slider(
-            "SelectKBest (Özellik Sayısı)", 1, 500, selectkbest_val, step=1, key="selectkbest_slider"
+        feature_extraction_val = bool(conf.get("feature_extraction", True))
+        self.feature_extraction = st.sidebar.checkbox(
+            "Feature Extraction (PolynomialFeatures + SelectKBest)",
+            value=feature_extraction_val,
+            key="feature_extraction_checkbox"
         )
-
+        # SelectKBest slider, sadece feature_extraction True ise aktif
+        self.selectkbest = st.sidebar.slider(
+            "SelectKBest (Özellik Sayısı)", 1, 500, selectkbest_val, step=1, key="selectkbest_slider",
+            disabled=not self.feature_extraction
+        )
         # Save to conf.yaml button
         if st.sidebar.button("Model Ayarlarını Kaydet (conf.yaml)"):
             with open(conf_path, 'r', encoding='utf-8') as f:
@@ -163,6 +196,7 @@ class App:
                 model_key_save = "LogisticRegression"
             conf['model'] = model_key_save
             conf['selectkbest'] = int(self.selectkbest)
+            conf['feature_extraction'] = bool(self.feature_extraction)
             if 'models' in conf and model_key_save in conf['models']:
                 conf['models'][model_key_save].update(model_params)
             else:
@@ -176,44 +210,94 @@ class App:
         # Train Model button
         if st.button("Train Model"):
             self.train_model()
+        # Save Model (.pkl) butonu sadece sidebar'da
+        if st.sidebar.button("Save Model (.pkl)"):
+            save_path = self.save_current_model()
+            if save_path:
+                st.sidebar.success(f"Model başarıyla kaydedildi: {save_path}", icon="💾")
+
+    def save_current_model(self):
+        """Güncel parametrelerle modeli eğitip .pkl olarak kaydeder ve yolunu döndürür."""
+        conf_path = os.path.join(project_root, 'conf.yaml')
+        with open(conf_path, 'r', encoding='utf-8') as f:
+            conf = yaml.safe_load(f)
+        model_type = conf.get("model")
+        models_conf = conf.get("models", {})
+        model_conf = models_conf.get(model_type, {})
+        # Model nesnesini oluştur
+        if model_type == "SVM":
+            model = SVMModel(kernel=model_conf.get("kernel", "rbf"), C=float(model_conf.get("C", 1.0)))
+        elif model_type == "CatBoost":
+            model = CatBoostModel(
+                iterations=int(model_conf.get("iterations", 100)),
+                learning_rate=float(model_conf.get("learning_rate", 0.1)),
+                depth=int(model_conf.get("depth", 6))
+            )
+        elif model_type == "XGBoost":
+            model = XGBoost(
+                n_estimators=int(model_conf.get("n_estimators", 100)),
+                max_depth=int(model_conf.get("max_depth", 3)),
+                learning_rate=float(model_conf.get("learning_rate", 0.1))
+            )
+        elif model_type == "RandomForestClassifier":
+            model = RandomForest(
+                n_estimators=int(model_conf.get("n_estimators", 100)),
+                max_depth=int(model_conf.get("max_depth", 3))
+            )
+        elif model_type == "LogisticRegression":
+            penalty = model_conf.get("penalty", "l2")
+            C = float(model_conf.get("C", 1.0))
+            if penalty == "l1":
+                solver = "liblinear"
+            else:
+                solver = "lbfgs"
+            model = LogisticRegressionModel(penalty=penalty, C=C, solver=solver)
+        else:
+            st.error(f"Unsupported model type: {model_type}")
+            return None
+        # Eğitimli modelin kaydedilmesi için processed_data kontrolü
+        if self.processed_data is None:
+            self.processed_data, _, _ = self.load_data(os.path.join(project_root, "data", conf.get("csv_name", "breast_cancer.csv")))
+        X = self.processed_data.drop(columns=["Target_Label"])
+        y = self.processed_data["Target_Label"]
+        model.fit(X, y)
+        save_path = model.save_model()
+        return save_path
+
+    def _get_df_summary(self, df, target_col=None):
+        """DataFrame için detaylı özet döndürür."""
+        summary = []
+        shape = df.shape
+        summary.append(f"**Shape:** {shape[0]} rows, {shape[1]} columns  ")
+        if target_col and target_col in df.columns:
+            class_dist = df[target_col].value_counts().to_dict()
+            summary.append(f"**Class Distribution:** {class_dist}")
+        missing = df.isnull().sum().sum()
+        summary.append(f"**Missing Values:** {missing}")
+        dtype_counts = df.dtypes.value_counts().to_dict()
+        summary.append(f"**Dtype Counts:** {dtype_counts}")
+        return summary
+
 
     def show_datasets(self):
         st.markdown("### Processed Data")
         st.dataframe(self.processed_data)
-        # --- Processed Data Summary ---
         if self.processed_data is not None:
-            shape = self.processed_data.shape
-            target_col = 'Target_Label' if 'Target_Label' in self.processed_data.columns else None
-            if target_col:
-                class_dist = self.processed_data[target_col].value_counts().to_dict() 
-            else:
-                class_dist = None
-            missing = self.processed_data.isnull().sum().sum() 
-            st.markdown(f"**Shape:** {shape[0]} rows, {shape[1]} columns  ")
-            if class_dist:
-                st.markdown(f"**Class Distribution:** {class_dist}")
-            st.markdown(f"**Missing Values:** {missing}")
+            summary = self._get_df_summary(self.processed_data, target_col='Target_Label' if 'Target_Label' in self.processed_data.columns else None)
+            for s in summary:
+                st.markdown(s)
 
         st.markdown("### Preprocessed Data")
         st.dataframe(self.preprocessed_data)
-        # --- Preprocessed Data Summary ---
         if self.preprocessed_data is not None:
-            shape = self.preprocessed_data.shape
-            # Try to find a target/diagnosis column
             diag_col = None
             for col in ['Diagnosis', 'diagnosis', 'Target_Label', 'target', 'label']:
                 if col in self.preprocessed_data.columns:
                     diag_col = col
                     break
-            if diag_col:
-                class_dist = self.preprocessed_data[diag_col].value_counts().to_dict()
-            else:
-                class_dist = None
-            missing = self.preprocessed_data.isnull().sum().sum()
-            st.markdown(f"**Shape:** {shape[0]} rows, {shape[1]} columns  ")
-            if class_dist:
-                st.markdown(f"**Class Distribution:** {class_dist}")
-            st.markdown(f"**Missing Values:** {missing}")
+            summary = self._get_df_summary(self.preprocessed_data, target_col=diag_col)
+            for s in summary:
+                st.markdown(s)
 
 
     def train_model(self):
@@ -278,22 +362,14 @@ class App:
         st.success(f"Model trained successfully! Accuracy: {acc:.6f}",icon="✅")
 
         # Confusion Matrix plot
-        from sklearn.metrics import confusion_matrix
-        import seaborn as sns
         cm = confusion_matrix(y_test, y_pred)
-        # --- Label names for axes ---
         label_map = self.label_map
         if label_map is not None and isinstance(label_map, dict):
-            # Inverse mapping: encoded value -> original label
-            # Sort by encoded value (key)
             sorted_items = sorted(label_map.items())
             labels = [v for k, v in sorted_items]
         else:
-            # Fallback: show unique values in y_test
             labels = sorted(np.unique(y_test))
-        fig, ax = plt.subplots()
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, xticklabels=labels, yticklabels=labels)
-        ax.set_xlabel('Predicted')
-        ax.set_ylabel('Actual')
-        ax.set_title('Confusion Matrix')
+        fig = plot_confusion_matrix(cm, labels)
         st.pyplot(fig)
+
+
