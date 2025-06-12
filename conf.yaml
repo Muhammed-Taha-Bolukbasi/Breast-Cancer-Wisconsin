@@ -1,34 +1,35 @@
 target_col: diagnosis
 csv_name: breast_cancer.csv
-selectkbest: 142
+selectkbest: 189
+feature_extraction: false
 models:
   RandomForestClassifier:
-    n_estimators: 130
-    max_depth: 4
+    n_estimators: 379
+    max_depth: 8
     random_state: 42
     test_size: 0.2
   XGBoost:
-    n_estimators: 107
+    n_estimators: 436
     max_depth: 5
-    learning_rate: 0.1
+    learning_rate: 0.06
     random_state: 42
-    test_size: 0.22
+    test_size: 0.2
   LogisticRegression:
     penalty: l1
-    C: 1.0
+    C: 0.73
     solver: lbfgs
     max_iter: 1000
     random_state: 42
-    test_size: 0.83
+    test_size: 0.2
   SVM:
-    kernel: rbf
-    C: 3.83
+    kernel: linear
+    C: 2.56
     probability: true
     random_state: 42
-    test_size: 0.72
+    test_size: 0.2
   CatBoost:
-    iterations: 100
-    depth: 6
+    iterations: 342
+    depth: 8
     learning_rate: 0.1
     random_seed: 42
     verbose: false
@@ -40,4 +41,4 @@ metrics:
 - precision
 - recall
 - f1-score
-model: SVM
+model: XGBoost

@@ -16,7 +16,7 @@ import numpy as np
 # Ensure that the DataLoader and DataPreprocessor are correctly imported
 class XGBoost(BaseEstimator, ClassifierMixin):
     def __init__(self, **kwargs):
-        self.model = XGBClassifier(use_label_encoder=False, eval_metric='logloss', **kwargs)        
+        self.model = XGBClassifier(eval_metric='logloss', **kwargs)        
 
     def fit(self, X, y=None):
         """
@@ -27,6 +27,8 @@ class XGBoost(BaseEstimator, ClassifierMixin):
             if "Target_Label" in X.columns:
                 y = X["Target_Label"]
                 X = X.drop(columns=["Target_Label"])
+            else:
+                raise ValueError("y must not be None. Provide y or ensure 'Target_Label' exists in X.")   
         self.model.fit(X, y)
         return self
 
@@ -58,22 +60,3 @@ class XGBoost(BaseEstimator, ClassifierMixin):
         joblib.dump(self.model, abs_model_path)
         return abs_model_path
 
-
-if __name__ == "__main__":
-    # Example usage
-    dataloader = DataLoader()
-    csv_path = os.path.join(project_root, "data", "breast_cancer.csv")
-    df, df_target = dataloader.load_data(csv_path)
-    
-    preprocessor = DataPreprocessor()
-    df_processed = preprocessor.fit_transform(df, df_target)
-
-    X_train, X_test, y_train, y_test = train_test_split(df_processed.drop(columns=["Target_Label"]), df_processed["Target_Label"], test_size=0.2, random_state=42)
-
-    model = XGBoost(n_estimators=100, max_depth=3, learning_rate=0.1)
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    print("Predictions:", y_pred)
-    # Save the trained model
-    saved_path = model.save_model()
-    print(f"Model saved to: {saved_path}")

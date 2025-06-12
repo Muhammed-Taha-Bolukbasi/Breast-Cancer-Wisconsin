@@ -98,7 +98,8 @@ class LabelEncoderTransformer:
             self.label_mapping = dict(zip(classes, encoded))
             self.inverse_label_mapping = dict(zip(encoded, classes))
         else:
-            y_new = y
+            y_new = y.copy()
+            y_new.name = 'Target_Label'  # Always set name to Target_Label
             self.was_encoded = False
             self.label_mapping = None
             self.inverse_label_mapping = None
@@ -128,23 +129,22 @@ class DataPreprocessorPipeline(BaseEstimator, TransformerMixin):
         with open(os.path.join(project_root, 'conf.yaml'), 'r') as file:
             self.config = yaml.safe_load(file)
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, feature_extraction: bool = True):
         # Automatically detect numerical and categorical columns
         self.numerical_cols = X.select_dtypes(include=[np.number]).columns.tolist()
         self.categorical_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
-        # For numerical features: impute missing values with median, then scale with MinMaxScaler, then feature extraction, then feature selection
-        num_pipeline = Pipeline([
+        # Feature extraction flag from config if not explicitly passed
+        feature_extraction_flag = self.config.get('feature_extraction', True) if feature_extraction is None else feature_extraction
+        # Build numerical pipeline conditionally
+        num_steps = [
             ('drop_empty', DropUnnecessaryColumns()),
             ('imputer', SimpleImputer(strategy='median')),
             ('scaler', MinMaxScaler()),
-            # Example feature extraction: PolynomialFeatures
-            ('feature_extraction', PolynomialFeatures(degree=2, include_bias=False)),
-            ('feature_selection', SelectKBest(score_func=f_classif, k=self.config.get('selectkbest', 100))),
-        ])
-
-        """
-        TODO: k sayisini, n_estimators, max_depth gibi parametreleri config dosyasindan alacak sekilde duzenle
-        """
+        ]
+        if feature_extraction_flag:
+            num_steps.append(('feature_extraction', PolynomialFeatures(degree=2, include_bias=False)))
+            num_steps.append(('feature_selection', SelectKBest(score_func=f_classif, k=self.config.get('selectkbest', 100))))
+        num_pipeline = Pipeline(num_steps)
         # For categorical features: impute missing values with mode, then encode with OneHotEncoder
         cat_pipeline = Pipeline([
             ('imputer', SimpleImputer(strategy='most_frequent')),
@@ -166,9 +166,9 @@ class DataPreprocessorPipeline(BaseEstimator, TransformerMixin):
         # Transform the data using the pipeline
         return self.pipeline.transform(X)
 
-    def fit_transform(self, X, y=None, **fit_params) -> np.ndarray:
+    def fit_transform(self, X, y=None, feature_extraction: bool = True,  **fit_params) -> np.ndarray:
         # Perform both fit and transform, return the result as a numpy array
-        return np.asarray(self.fit(X, y).transform(X))
+        return np.asarray(self.fit(X, y, feature_extraction=feature_extraction).transform(X))
     
 
 class DataPreprocessor:
@@ -183,7 +183,7 @@ class DataPreprocessor:
         self.feature_names = None
         self.label_encoder = None
 
-    def fit_transform(self, X: pd.DataFrame, y: pd.Series, return_mapping: bool = False) -> Any:
+    def fit_transform(self, X: pd.DataFrame, y: pd.Series, return_mapping: bool = False, feature_extraction: bool = True) -> Any:
         """
         Fit the preprocessing pipeline to the features and target, then transform them.
         args:
@@ -195,7 +195,7 @@ class DataPreprocessor:
             mapping (Optional[dict]): Mapping of original labels to encoded values if return_mapping is True.
         """
         # Fit and transform features
-        X_transformed = self.pipeline.fit_transform(X, y) 
+        X_transformed = self.pipeline.fit_transform(X, y, feature_extraction=feature_extraction)
         feature_names = self.pipeline.pipeline.get_feature_names_out() # type: ignore
         X_transformed_df = pd.DataFrame(X_transformed, columns=feature_names, index=X.index)
         # Encode and merge target
@@ -212,15 +212,4 @@ class DataPreprocessor:
             if not isinstance(df, pd.DataFrame):
                 df = pd.DataFrame(df)
             return df
-
-if __name__ == "__main__":
-    # Example usage
-    dataloader = DataLoader()
-    csv_path = os.path.join(project_root, "data", "breast_cancer.csv")
-    df, df_target = dataloader.load_data(csv_path)
-
-    preprocessor = DataPreprocessor()
-    result = preprocessor.fit_transform(df, df_target, return_mapping=True)
-    df_processed, mapping = result
-    print(df_processed.tail(5))     
-    print("Label Mapping:", mapping)
+        

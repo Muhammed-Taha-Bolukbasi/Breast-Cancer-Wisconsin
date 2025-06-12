@@ -18,12 +18,11 @@ class SVMModel(BaseEstimator, ClassifierMixin):
         self.model = SVC(kernel=kernel, C=C, probability=probability, **kwargs)
 
     def fit(self, X, y=None):
-        if y is None and isinstance(X, pd.DataFrame):
-            if "Target_Label" in X.columns:
-                y = X["Target_Label"]
-                X = X.drop(columns=["Target_Label"])
         if y is None:
-            raise ValueError("y cannot be None. Please provide target values for fitting.")
+            if not (isinstance(X, pd.DataFrame) and "Target_Label" in X.columns):
+                raise ValueError("y must not be None. Provide y or ensure 'Target_Label' exists in X.")
+            y = X["Target_Label"]
+            X = X.drop(columns=["Target_Label"])
         self.model.fit(X, y)
         return self
 
@@ -55,19 +54,3 @@ class SVMModel(BaseEstimator, ClassifierMixin):
         joblib.dump(self.model, abs_model_path)
         return abs_model_path
 
-if __name__ == "__main__":
-    dataloader = DataLoader()
-    csv_path = os.path.join(project_root, "data", "breast_cancer.csv")
-    df, df_target = dataloader.load_data(csv_path)
-    preprocessor = DataPreprocessor()
-    df_processed = preprocessor.fit_transform(df, df_target)
-    X_train, X_test, y_train, y_test = train_test_split(df_processed.drop(columns=["Target_Label"]), df_processed["Target_Label"], test_size=0.2, random_state=42) # type: ignore
-    model = SVMModel(kernel='rbf', C=1.0)
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    from sklearn.metrics import accuracy_score
-    acc = accuracy_score(y_test, y_pred)
-    print(f"Accuracy: {acc:.4f}")
-    # Save the trained model
-    saved_path = model.save_model()
-    print(f"Model saved to: {saved_path}")
