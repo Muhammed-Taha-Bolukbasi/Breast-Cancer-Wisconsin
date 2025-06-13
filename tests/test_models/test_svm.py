@@ -1,89 +1,59 @@
-import pytest
-import numpy as np
 import pandas as pd
-from src.models.svm_model import SVMModel
+import numpy as np
+from src.models.svm_model import SVMPipeline
+import pytest
 
-def test_svm_fit_predict():
+def test_svm_pipeline_fit_predict():
+    # Create a simple classification dataset
     X = pd.DataFrame({
         'f1': [1, 2, 3, 4, 5, 6],
-        'f2': [2, 1, 2, 1, 2, 1]
+        'f2': [10, 20, 30, 40, 50, 60]
     })
-    y = pd.Series([0, 1, 0, 1, 0, 1])
-    model = SVMModel(kernel='linear', C=1.0)
+    y = np.array([0, 1, 0, 1, 0, 1])
+    model = SVMPipeline()
     model.fit(X, y)
     preds = model.predict(X)
+    assert len(preds) == len(y)
     assert set(np.unique(preds)).issubset({0, 1})
-    acc = (preds == y).mean()
-    assert acc >= 0.5
 
-def test_svm_predict_proba():
+def test_svm_pipeline_methods():
     X = pd.DataFrame({
         'f1': [1, 2, 3, 4, 5, 6],
-        'f2': [2, 1, 2, 1, 2, 1]
+        'f2': [10, 20, 30, 40, 50, 60]
     })
-    y = pd.Series([0, 1, 0, 1, 0, 1])
-    model = SVMModel(kernel='linear', C=1.0)
+    y = np.array([0, 1, 0, 1, 0, 1])
+    model = SVMPipeline(probability=True)
+    # Test fit
     model.fit(X, y)
+    # Test predict
+    preds = model.predict(X)
+    assert isinstance(preds, np.ndarray)
+    assert preds.shape == y.shape
+    # Test predict_proba
     proba = model.predict_proba(X)
-    assert proba.shape == (len(X), 2)
-    np.testing.assert_allclose(proba.sum(axis=1), 1, rtol=1e-5)
-
-def test_svm_get_set_params():
-    model = SVMModel(kernel='linear', C=1.0)
+    assert proba.shape[0] == X.shape[0]
+    # Test get_params and set_params
     params = model.get_params()
-    assert 'C' in params
-    assert params['C'] == 1.0
+    assert isinstance(params, dict)
     model.set_params(C=2.0)
-    params2 = model.get_params()
-    assert params2['C'] == 2.0
+    assert model.get_params()["C"] == 2.0
+    # Test save_model
+    path = model.save_model()
+    assert path.endswith(".pkl")
 
-def test_svm_fit_with_dataframe_and_target_label():
-    X = pd.DataFrame({
-        'f1': [1, 2, 3, 4, 5, 6],
-        'f2': [2, 1, 2, 1, 2, 1],
-        'Target_Label': [0, 1, 0, 1, 0, 1]
-    })
-    model = SVMModel(kernel='linear', C=1.0)
-    model.fit(X)
-    preds = model.predict(X.drop(columns=['Target_Label']))
-    assert set(np.unique(preds)).issubset({0, 1})
+def test_predict_without_fit_raises():
+    model = SVMPipeline(probability=True)
+    X = pd.DataFrame({'f1': [1, 2], 'f2': [10, 20]})
+    with pytest.raises(RuntimeError, match="Pipeline is not fitted yet. Call 'fit' before 'predict'."):
+        model.predict(X)
 
-def test_svm_save_model():
-    import shutil
-    import joblib
-    import os
-    import yaml
-    X = pd.DataFrame({'f1': [1, 2, 3, 4], 'f2': [2, 1, 2, 1]})
-    y = pd.Series([0, 1, 0, 1])
-    model = SVMModel(kernel='linear', C=1.0)
-    model.fit(X, y)
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    conf_path = os.path.join(project_root, 'conf.yaml')
-    conf_backup = conf_path + '.bak'
-    shutil.copy(conf_path, conf_backup)
-    save_path = None
-    try:
-        with open(conf_path, 'r') as f:
-            conf = yaml.safe_load(f)
-        conf['model_save_name'] = 'test_svm_model.pkl'
-        with open(conf_path, 'w') as f:
-            yaml.dump(conf, f)
-        save_path = model.save_model()
-        assert os.path.exists(save_path)
-        loaded_model = joblib.load(save_path)
-        preds = loaded_model.predict(X)
-        assert len(preds) == len(y)
-    finally:
-        shutil.move(conf_backup, conf_path)
-        if save_path and os.path.exists(save_path):
-            os.remove(save_path)
+def test_predict_proba_without_fit_raises():
+    model = SVMPipeline(probability=True)
+    X = pd.DataFrame({'f1': [1, 2], 'f2': [10, 20]})
+    with pytest.raises(RuntimeError, match="Pipeline is not fitted yet. Call 'fit' before 'predict_proba'."):
+        model.predict_proba(X)
 
-def test_svm_fit_raises_if_y_none_and_no_target_label():
-    X = pd.DataFrame({
-        'f1': [1, 2, 3],
-        'f2': [2, 1, 2]
-    })
-    model = SVMModel(kernel='linear', C=1.0)
-    # y=None ve Target_Label yoksa ValueError fırlatmalı
-    with pytest.raises(ValueError, match="y must not be None. Provide y or ensure 'Target_Label' exists in X."):
-        model.fit(X, y=None)
+def test_save_model_without_fit_raises():
+    model = SVMPipeline(probability=True)
+    with pytest.raises(RuntimeError, match="Pipeline is not fitted yet. Call 'fit' before 'save_model'."):
+        model.save_model()

@@ -1,31 +1,39 @@
 import pandas as pd
 import os
+import sys
 from pathlib import Path
 import yaml
 from typing import Tuple, Union
-from typing import Optional, Union
-from .error_messages import DataReadingErrorMessages as EM, SUPPORTED_FILE_EXTENSIONS
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+from typing import Optional, Union, Any
+from sklearn.preprocessing import LabelEncoder
 
-data_reader_functions = {
-    ".csv": pd.read_csv
-}
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.append(project_root)
+from src.data_loader.error_messages import (
+    DataReadingErrorMessages as EM,
+    SUPPORTED_FILE_EXTENSIONS,
+)
+from sklearn.model_selection import train_test_split
+
+data_reader_functions = {".csv": pd.read_csv}
+
 
 class DataLoader:
     """A class to load data from various file formats."""
 
-    def __init__(self, target_col = None):
+    def __init__(self, target_col=None):
         """
         Initializes the DataLoader class.
         """
+        # Always load config so self.config is available
+        with open(os.path.join(project_root, "conf.yaml"), "r") as f:
+            self.config = yaml.safe_load(f)
         if target_col is None:
-            with open(os.path.join(project_root, "conf.yaml"), "r") as f:
-                config = yaml.safe_load(f)
-            self.target_col = config.get("target_col")
+            self.target_col = self.config.get("target_col")
         else:
             self.target_col = target_col
 
-    def load_data(self, file_path: Union[str, Path]) -> Tuple[pd.DataFrame, pd.Series]:
+    def load_data(self, file_path: Union[str, Path]) -> Any:
         """
         Loads data from a  file.
 
@@ -47,23 +55,24 @@ class DataLoader:
         if data.empty:
             raise ValueError(EM.EMPTY_DATA_FILE.value)
 
-        X, y = self._split_dataframe(data)
-        return X, y
+        y_enc, le = label_encode_series(
+            data[self.target_col]
+        )  # Encode target column if categorical
 
-    def _split_dataframe(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
-        """
-        Splits the DataFrame into features and target.
+        X_train, X_test, y_train, y_test = train_test_split(
+            data.drop(columns=[self.target_col]),
+            y_enc,
+            test_size=self.config.get("test_size", 0.2),  # Default test size is 20%
+            random_state=42,
+        )
 
-        Args:
-            df (pd.DataFrame): The DataFrame to split.
+        # Return a label_map (dict) instead of the LabelEncoder object
+        if le is not None:
+            label_map = {i: label for i, label in enumerate(le.classes_)}
+        else:
+            label_map = None
 
-        Returns:
-            tuple[pd.DataFrame, pd.Series]: A tuple containing the features DataFrame and the target Series.
-        """
-        X = df.drop(columns=[self.target_col])
-        y = df[self.target_col]
-        return X, y
-
+        return X_train, X_test, y_train, y_test, label_map
 
     def _validate_file_path(self, file_path: Union[str, Path]) -> None:
         """
@@ -76,11 +85,12 @@ class DataLoader:
             ValueError: If the file path is not a string or Path object.
         """
         if not isinstance(file_path, (str, Path)):
-            raise ValueError(EM.INVALID_FILE_PATH_TYPE.value.format(type=type(file_path).__name__))
-        
+            raise ValueError(
+                EM.INVALID_FILE_PATH_TYPE.value.format(type=type(file_path).__name__)
+            )
+
         if not os.path.exists(file_path):
             raise FileNotFoundError(EM.FILE_NOT_FOUND.value.format(file_path=file_path))
-        
 
     def _check_if_file_extension_suported(self, file_path: Union[str, Path]) -> str:
         """
@@ -94,6 +104,24 @@ class DataLoader:
         """
         ext = Path(file_path).suffix
         if ext not in SUPPORTED_FILE_EXTENSIONS:
-            raise ValueError(EM.EXT_NOT_SUPPORTED.value.format(ext=ext, supported_extensions=SUPPORTED_FILE_EXTENSIONS))
-        
+            raise ValueError(
+                EM.EXT_NOT_SUPPORTED.value.format(
+                    ext=ext, supported_extensions=SUPPORTED_FILE_EXTENSIONS
+                )
+            )
+
         return ext
+
+
+def label_encode_series(y):
+    """
+    If the input series is categorical, encode it with LabelEncoder.
+    Returns: encoded array, label_encoder (or None if not encoded)
+    """
+    if y.dtype == "object" or str(y.dtype).startswith("category"):
+        le = LabelEncoder()
+        y_enc = le.fit_transform(y)
+        return y_enc, le
+    else:
+        return y, None
+

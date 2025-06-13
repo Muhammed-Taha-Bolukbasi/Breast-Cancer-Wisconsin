@@ -1,63 +1,102 @@
 from xgboost import XGBClassifier
-from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
 import os
 import sys
-# Add project root directory to sys.path so that modules in src can be imported
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+import yaml
+import joblib
+import pandas as pd
+from pathlib import Path
+
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(project_root)
 
-import yaml
+from src.data_preprocessing.data_preprocessor import DataPreprocessorPipeline
 from src.data_loader.data_loader import DataLoader
-from src.data_preprocessing.data_preprocessor import DataPreprocessor
-import pandas as pd
-import numpy as np
 
-# Ensure that the DataLoader and DataPreprocessor are correctly imported
-class XGBoost(BaseEstimator, ClassifierMixin):
+from sklearn.base import BaseEstimator, ClassifierMixin
+
+
+class XGBoostPipeline(BaseEstimator, ClassifierMixin):
+    XGBOOST_ALLOWED_PARAMS = {
+        "n_estimators",
+        "max_depth",
+        "learning_rate",
+        "random_state",
+        "subsample",
+        "colsample_bytree",
+        "min_child_weight",
+        "gamma",
+        "reg_alpha",
+        "reg_lambda",
+        "scale_pos_weight",
+        "objective",
+        "booster",
+        "tree_method",
+        "eval_metric",
+        "use_label_encoder",
+    }
+
     def __init__(self, **kwargs):
-        self.model = XGBClassifier(eval_metric='logloss', **kwargs)        
+        self.model_params = {
+            k: v for k, v in kwargs.items() if k in self.XGBOOST_ALLOWED_PARAMS
+        }
+        self.pipeline = None
+        with open(os.path.join(project_root, "conf.yaml"), "r") as file:
+            self.config = yaml.safe_load(file)
 
-    def fit(self, X, y=None):
-        """
-        Fit the XGBoost model. If y is None, tries to use 'Target_Label' column from X.
-        If 'Target_Label' exists in X, it is used as target and dropped from features.
-        """
-        if y is None and isinstance(X, (pd.DataFrame, )):
-            if "Target_Label" in X.columns:
-                y = X["Target_Label"]
-                X = X.drop(columns=["Target_Label"])
-            else:
-                raise ValueError("y must not be None. Provide y or ensure 'Target_Label' exists in X.")   
-        self.model.fit(X, y)
+    def fit(self, X, y):
+        preprocessor = DataPreprocessorPipeline().build_pipeline(
+            X, feature_extraction=self.config["feature_extraction"]
+        )
+        self.pipeline = Pipeline(
+            [
+                ("preprocessing", preprocessor),
+                ("model", XGBClassifier(eval_metric="logloss", **self.model_params)),
+            ]
+        )
+        self.pipeline.fit(X, y)
         return self
 
     def predict(self, X):
-        return self.model.predict(X)
+        if self.pipeline is None:
+            raise RuntimeError(
+                "Pipeline is not fitted yet. Call 'fit' before 'predict'."
+            )
+        return self.pipeline.predict(X)
 
     def predict_proba(self, X):
-        return self.model.predict_proba(X)
+        if self.pipeline is None:
+            raise RuntimeError(
+                "Pipeline is not fitted yet. Call 'fit' before 'predict_proba'."
+            )
+        return self.pipeline.predict_proba(X)
 
     def get_params(self, deep=True):
-        return self.model.get_params(deep=deep)
+        if self.pipeline is not None:
+            return self.pipeline.get_params(deep=deep)
+        return self.model_params
 
     def set_params(self, **params):
-        self.model.set_params(**params)
+        self.model_params.update(params)
+        if self.pipeline is not None:
+            self.pipeline.set_params(**params)
         return self
-    
+
     def save_model(self):
-        """
-        Save the trained XGBoost model to the given file path using joblib.
-        Creates the directory if it does not exist.
-        """
-        import yaml
-        import joblib
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        with open(os.path.join(project_root, "conf.yaml"), 'r') as file:
+        if self.pipeline is None:
+            raise RuntimeError(
+                "Pipeline is not fitted yet. Call 'fit' before 'save_model'."
+            )
+        project_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..")
+        )
+        with open(os.path.join(project_root, "conf.yaml"), "r") as file:
             config = yaml.safe_load(file)
             model_save_name = config.get("model_save_name", "xgboost_model.pkl")
         path = os.path.join(project_root, "models_saves", "xgboost")
-        os.makedirs(path, exist_ok=True)  # Ensure directory exists
+        os.makedirs(path, exist_ok=True)
         abs_model_path = os.path.join(path, model_save_name)
-        joblib.dump(self.model, abs_model_path)
+        joblib.dump(self.pipeline, abs_model_path)
         return abs_model_path
+
+
