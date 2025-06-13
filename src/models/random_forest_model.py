@@ -76,7 +76,7 @@ class RandomForestPipeline(BaseEstimator, ClassifierMixin):
         with open(os.path.join(project_root, "conf.yaml"), "r") as file:
             config = yaml.safe_load(file)
             model_save_name = config.get("model_save_name", "random_forest_model.pkl")
-        path = os.path.join(project_root, "models_saves", "random_forest")
+        path = os.path.join(project_root, "model_saves", "random_forest")
         os.makedirs(path, exist_ok=True)
         abs_model_path = os.path.join(path, model_save_name)
         joblib.dump(self.pipeline, abs_model_path)

@@ -1,34 +1,43 @@
-target_col: diagnosis
 csv_name: breast_cancer.csv
-selectkbest: 109
+dl_model_save_name: test_torchmlp_save.pth
 feature_extraction: false
+model: TorchMLP
+model_save_name: model_save.pkl
 models:
-  RandomForestClassifier:
-    n_estimators: 379
-    max_depth: 8
-    random_state: 42
-  XGBoost:
-    n_estimators: 120
-    max_depth: 4
-    learning_rate: 0.09
-    random_state: 42
-  LogisticRegression:
-    penalty: l2
-    C: 1.0
-    solver: lbfgs
-    max_iter: 1000
-    random_state: 42
-  SVM:
-    kernel: linear
-    C: 2.56
-    probability: true
-    random_state: 42
   CatBoost:
-    iterations: 222
     depth: 8
+    iterations: 222
     learning_rate: 0.1
     random_seed: 42
     verbose: false
-test_size: 0.23
-model_save_name: breast_cancer_model.pkl
-model: XGBoost
+  LogisticRegression:
+    C: 1.0
+    max_iter: 1000
+    penalty: l2
+    random_state: 42
+    solver: lbfgs
+  RandomForestClassifier:
+    max_depth: 8
+    n_estimators: 379
+    random_state: 42
+  SVM:
+    C: 2.56
+    kernel: linear
+    probability: true
+    random_state: 42
+  TorchMLP:
+    batch_size: 32
+    epochs: 101
+    hidden_dim: 10
+    input_dim: 30
+    learning_rate: 0.1037
+    num_layers: 4
+    output_dim: 1
+  XGBoost:
+    learning_rate: 0.1
+    max_depth: 4
+    n_estimators: 120
+    random_state: 42
+selectkbest: 82
+target_col: diagnosis
+test_size: 0.21

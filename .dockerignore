@@ -1,15 +1,47 @@
+# Python cache files
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Data and model files
 *.pkl
+*.parquet
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.log
+*.pth
+
+# Development folders
 notebooks/
 htmlcov/
 tests/
+.pytest_cache/
+.venv/
+.env/
+.ipynb_checkpoints/
+.git/
+.github/
+.coverage
+.mypy_cache/
+
+# Model outputs
 models_saves/
-.git
-*.ipynb
 catboost_info/
+
+# Build files
 uv.lock
-*.log
-*.csv
-*.pyo
-*.pyd
+dist/
+build/
+*.egg-info/
+
+# Docker specific
+Dockerfile*
+.dockerignore
+
+# Editors
+.vscode/
+.idea/
+*~
