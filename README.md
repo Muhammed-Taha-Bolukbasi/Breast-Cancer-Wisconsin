@@ -1,1 +1,0 @@
-![App Diagram](images/diagram.png)

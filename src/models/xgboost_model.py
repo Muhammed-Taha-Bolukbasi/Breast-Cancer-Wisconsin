@@ -93,7 +93,7 @@ class XGBoostPipeline(BaseEstimator, ClassifierMixin):
         with open(os.path.join(project_root, "conf.yaml"), "r") as file:
             config = yaml.safe_load(file)
             model_save_name = config.get("model_save_name", "xgboost_model.pkl")
-        path = os.path.join(project_root, "models_saves", "xgboost")
+        path = os.path.join(project_root, "model_saves", "xgboost")
         os.makedirs(path, exist_ok=True)
         abs_model_path = os.path.join(path, model_save_name)
         joblib.dump(self.pipeline, abs_model_path)

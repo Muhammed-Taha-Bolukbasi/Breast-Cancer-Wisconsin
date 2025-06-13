@@ -16,6 +16,7 @@ from src.models.random_forest_model import RandomForestPipeline
 from src.models.logistic_regression_model import LogisticRegressionPipeline
 from src.models.svm_model import SVMPipeline
 from src.models.catboost_model import CatBoostPipeline
+from src.models.torch_mlp import SklearnTorchMLPPipeline
 
 
 class App:
@@ -101,7 +102,7 @@ class App:
    - Click ⚡ to train the selected model with the current settings.
    - Training metrics and evaluation plots will be displayed below.
 4. **Save the Trained Model:**
-   - Use the 💾 button in the sidebar to save the trained model as a .pkl file for future use.
+   - Use the 💾 button in the sidebar to save the trained model as a .pkl or .pth file for future use.
 
 _Note: You can always reload or change your data and model settings from the sidebar._
                 """)
@@ -155,10 +156,11 @@ _Note: You can always reload or change your data and model settings from the sid
             st.sidebar.success("Data settings saved to conf.yaml.", icon="✅")
             st.session_state["show_yaml_viewer"] = True
 
+        st.sidebar.markdown("---")
         st.sidebar.subheader("Model Selection")
         self.model_type = st.sidebar.selectbox(
             "Select Model",
-            ["SVM", "CatBoost", "XGBoost", "Random Forest", "Logistic Regression"],
+            ["SVM", "CatBoost", "XGBoost", "Random Forest", "Logistic Regression", "TorchMLP"],
             help="Choose the machine learning model to train.",
         )
 
@@ -216,9 +218,11 @@ _Note: You can always reload or change your data and model settings from the sid
             )
             self.learning_rate = st.sidebar.slider(
                 "Learning Rate",
-                0.01,
-                0.5,
-                float(model_conf.get("learning_rate", 0.1)),
+                0.0001,
+                1.0,
+                float(model_conf.get("learning_rate", 0.01)),
+                step=0.0001,
+                format="%.3f",
                 key="catboost_lr",
                 help="Learning rate for CatBoost",
             )
@@ -256,16 +260,18 @@ _Note: You can always reload or change your data and model settings from the sid
             self.max_depth = st.sidebar.slider(
                 "Max Depth",
                 1,
-                10,
+                20,
                 int(model_conf.get("max_depth", 3)),
                 key="xgb_depth",
                 help="Maximum tree depth for XGBoost",
             )
             self.learning_rate = st.sidebar.slider(
                 "Learning Rate",
-                0.01,
-                0.5,
-                float(model_conf.get("learning_rate", 0.1)),
+                0.0001,
+                1.0,
+                float(model_conf.get("learning_rate", 0.01)),
+                step=0.0001,
+                format="%.3f",
                 key="xgb_lr",
                 help="Learning rate for XGBoost",
             )
@@ -295,7 +301,7 @@ _Note: You can always reload or change your data and model settings from the sid
             self.max_depth_rf = st.sidebar.slider(
                 "Max Depth",
                 1,
-                10,
+                20,
                 int(model_conf.get("max_depth", 3)),
                 key="rf_depth",
                 help="Maximum tree depth for Random Forest",
@@ -339,6 +345,79 @@ _Note: You can always reload or change your data and model settings from the sid
                 help="Test set size for splitting data",
             )
             model_params = {"penalty": self.penalty, "C": float(self.C_lr)}
+        elif self.model_type == "TorchMLP":
+            self.num_layers = st.sidebar.slider(
+                "Number of Hidden Layers",
+                1,
+                15,
+                int(model_conf.get("num_layers", 2)),
+                key="mlp_num_layers",
+                help="Number of hidden layers in the MLP",
+            )
+            self.hidden_dim = st.sidebar.slider(
+                "Hidden Layer Size",
+                4,
+                256,
+                int(model_conf.get("hidden_dim", 16)),
+                key="mlp_hidden_dim",
+                help="Number of neurons in each hidden layer",
+            )
+            self.epochs = st.sidebar.slider(
+                "Epochs",
+                1,
+                1000,
+                int(model_conf.get("epochs", 10)),
+                key="mlp_epochs",
+                help="Number of training epochs",
+            )
+            self.learning_rate = st.sidebar.slider(
+                "Learning Rate",
+                0.0001,
+                1.0,
+                float(model_conf.get("learning_rate", 0.01)),
+                step=0.0001,
+                format="%.3f",
+                key="mlp_lr_slider",
+                help="Learning rate for optimizer",
+            )
+            self.batch_size = st.sidebar.slider(
+                "Batch Size",
+                1,
+                256,
+                int(model_conf.get("batch_size", 32)),
+                key="mlp_batch_size",
+                help="Batch size for training",
+            )
+            self.output_dim = st.sidebar.number_input(
+                "Output Layer Size",
+                min_value=1,
+                max_value=100,
+                value=int(model_conf.get("output_dim", 2)),
+                step=1,
+                key="mlp_output_dim",
+                help="Number of output neurons (classes)",
+            )
+            st.sidebar.info(
+                "For binary classification, set output layer size to 1. For multiclass classification, set it to the number of classes.",
+                icon="ℹ️"
+            )
+            self.test_size = st.sidebar.slider(
+                "Test Size",
+                test_size_min,
+                test_size_max,
+                test_size,
+                step=0.01,
+                key="mlp_test_size",
+                help="Test set size for splitting data",
+            )
+            model_params = {
+                "num_layers": int(self.num_layers),
+                "hidden_dim": int(self.hidden_dim),
+                "epochs": int(self.epochs),
+                "learning_rate": float(self.learning_rate),
+                "batch_size": int(self.batch_size),
+                "output_dim": int(self.output_dim),
+            }
 
         # Global feature extraction and selection parameters
         selectkbest_val = int(conf.get("selectkbest", 300))
@@ -359,6 +438,7 @@ _Note: You can always reload or change your data and model settings from the sid
             disabled=not self.feature_extraction,
             help="Number of features to select with SelectKBest.",
         )
+       
         # Save model settings button
         if st.sidebar.button(
             "Save Model Settings",
@@ -386,6 +466,7 @@ _Note: You can always reload or change your data and model settings from the sid
                 yaml.dump(conf, f, allow_unicode=True, sort_keys=False)
             st.sidebar.success("Model and parameters saved to conf.yaml.", icon="✅")
             st.session_state["show_yaml_viewer"] = True
+       
         # Train model button
         if st.button(
             "Train Model",
@@ -393,10 +474,11 @@ _Note: You can always reload or change your data and model settings from the sid
             icon="⚡",
         ):
             self.train_model()
+        st.sidebar.markdown("---")
         # Save trained model button
         if st.sidebar.button(
-            "Save Trained Model (.pkl)",
-            help="Save the trained pipeline model as a .pkl file",
+            "Save Trained Model",
+            help="Save the trained pipeline model to disk",
             icon="💾",
         ):
             save_path = self.save_model()
@@ -421,6 +503,8 @@ _Note: You can always reload or change your data and model settings from the sid
             model = RandomForestPipeline(**model_conf)
         elif model_type == "LogisticRegression":
             model = LogisticRegressionPipeline(**model_conf)
+        elif model_type == "TorchMLP":
+            model = SklearnTorchMLPPipeline(**model_conf)
         else:
             st.error(f"Unsupported model type: {model_type}")
             return None
@@ -500,6 +584,8 @@ _Note: You can always reload or change your data and model settings from the sid
             model = RandomForestPipeline(**model_conf)
         elif model_type == "LogisticRegression":
             model = LogisticRegressionPipeline(**model_conf)
+        elif model_type == "TorchMLP":
+            model = SklearnTorchMLPPipeline(**model_conf)
         else:
             st.error(f"Unsupported model type: {model_type}")
             return
@@ -532,9 +618,7 @@ _Note: You can always reload or change your data and model settings from the sid
         st.markdown(f"**F1 Score (weighted):** {f1:.6f}")
         from src.streamlit_app.plot_utils import (
             plot_confusion_matrix,
-            plot_roc_curve,
-            plot_precision_recall_curve,
-            plot_calibration_curve,
+            
         )
         import matplotlib.pyplot as plt
 
@@ -546,22 +630,6 @@ _Note: You can always reload or change your data and model settings from the sid
             labels = [v for k, v in sorted_items]
         else:
             labels = sorted(np.unique(self.y_test))
-        fig = plot_confusion_matrix(cm, labels)
-        st.pyplot(fig)
-        # ROC, PR, Calibration curves
-        if hasattr(model, "predict_proba"):
-            y_score = model.predict_proba(self.X_test)
-            if y_score.shape[1] == 2:
-                y_score_roc = y_score[:, 1]
-            else:
-                y_score_roc = y_score[:, 1]
-            fig_roc = plot_roc_curve(self.y_test, y_score_roc, pos_label=1)
-            st.pyplot(fig_roc)
-            fig_pr = plot_precision_recall_curve(self.y_test, y_score_roc, pos_label=1)
-            st.pyplot(fig_pr)
-            fig_cal = plot_calibration_curve(self.y_test, y_score_roc)
-            st.pyplot(fig_cal)
-        else:
-            st.info(
-                "The selected model does not support probability prediction, so ROC, Precision-Recall, and Calibration curves cannot be displayed."
-            )
+
+        cm_fig = plot_confusion_matrix(cm, labels)
+        st.pyplot(cm_fig, clear_figure=True)

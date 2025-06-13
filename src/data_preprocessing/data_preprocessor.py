@@ -3,7 +3,6 @@ import numpy as np
 import yaml
 import sys
 import os
-from typing import Union, Tuple, Optional, Any
 
 # Add project root directory to sys.path so that modules in src can be imported
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -65,6 +64,7 @@ class DataPreprocessorPipeline(BaseEstimator, TransformerMixin):
             self.config = yaml.safe_load(file)
 
     def build_pipeline(self, X_train: pd.DataFrame, feature_extraction: bool = True):
+
         self.numerical_cols = X_train.select_dtypes(
             include=[np.number]
         ).columns.tolist()
@@ -100,10 +100,7 @@ class DataPreprocessorPipeline(BaseEstimator, TransformerMixin):
         cat_pipeline = Pipeline(
             [
                 ("imputer", SimpleImputer(strategy="most_frequent")),
-                (
-                    "encoder",
-                    OneHotEncoder(handle_unknown="ignore", sparse_output=False),
-                ),
+                ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
             ]
         )
 
