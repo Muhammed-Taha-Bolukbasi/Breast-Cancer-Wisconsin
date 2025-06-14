@@ -1,7 +1,7 @@
 csv_name: breast_cancer.csv
 dl_model_save_name: test_torchmlp_save.pth
-feature_extraction: false
-model: TorchMLP
+feature_extraction: true
+model: XGBoost
 model_save_name: model_save.pkl
 models:
   CatBoost:
@@ -35,9 +35,9 @@ models:
     output_dim: 1
   XGBoost:
     learning_rate: 0.1
-    max_depth: 4
+    max_depth: 5
     n_estimators: 120
     random_state: 42
 selectkbest: 82
 target_col: diagnosis
-test_size: 0.21
+test_size: 0.25
