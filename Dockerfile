@@ -3,42 +3,42 @@ FROM python:3.13-slim AS builder
 
 WORKDIR /app
 
-# Önce requirements dosyasını kopyala ve bağımlılıkları kur
+# Copy requirements file and install dependencies first
 COPY requirements.txt ./
 
-# Sadece gerekli build araçlarını kur ve temizle
+# Install only necessary build tools and clean up
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential && \
     pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
+    pip install --progress-bar off --no-cache-dir -r requirements.txt && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Sadece gerekli dosyaları kopyala
+# Copy only necessary files
 COPY ./src ./src
 COPY ./main.py ./
 COPY ./conf.yaml ./
 COPY ./data ./data
 
-# Stage 2: Çalışma ortamı - sadece runtime gereksinimlerini içerir
+# Stage 2: Runtime environment - contains only runtime dependencies
 FROM python:3.13-slim
 
 WORKDIR /app
 
-# PATH'e ~/.local/bin ekle
+# Add ~/.local/bin to PATH (for streamlit etc.)
 ENV PATH="/root/.local/bin:$PATH"
 
-# Sadece runtime bağımlılıklarını kopyala ve kur
+# Copy and install only runtime dependencies
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt && \
+RUN pip install --progress-bar off --no-cache-dir -r requirements.txt && \
     rm -rf /root/.cache/pip
 
-# Builder'dan sadece gerekli dosyaları kopyala
+# Copy only necessary files from builder
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/main.py ./
 COPY --from=builder /app/conf.yaml ./
 COPY --from=builder /app/data ./data
 
-# Streamlit uygulamasını başlat
+# Start the Streamlit app
 EXPOSE 8080
 ENTRYPOINT ["streamlit", "run", "main.py", "--server.port=8080", "--server.address=0.0.0.0"]
