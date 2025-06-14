@@ -55,7 +55,7 @@ With the Streamlit interface in this project, you can easily perform the followi
   - Save your model and data settings.
 
 - **Model Training and Evaluation:**
-  - Train the selected model with a single click and instantly view training and test results (accuracy, F1, ROC AUC, etc.).
+  - Train the selected model with a single click and instantly view training and test results (accuracy, F1, etc.).
   - Any errors or warnings during training are displayed in a user-friendly way.
 
   
